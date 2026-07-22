@@ -297,7 +297,7 @@ var RunfastShare = (function () {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.version === 1 && Array.isArray(data.sessions)) return data;
+        if (data.version === 1 && Array.isArray(data.sessions) && Array.isArray(data.playerDirectory)) return data;
       }
     } catch (e) { /* 损坏数据按空库处理 */ }
     return { version: 1, playerDirectory: [], sessions: [] };
@@ -438,7 +438,7 @@ var RunfastShare = (function () {
     const ps = view.participants;
     const w = view.winner;
     const losers = ps.filter((n) => n !== w);
-    const ready = w && losers.every((n) => view.cards[n] !== undefined);
+    const ready = w && losers.every((n) => typeof view.cards[n] === 'number');
     let previewHtml = '';
     if (ready) {
       const ts = L.roundTransfers({ winner: w, losers: currentLosers() }, s.pricePerCardFen);
@@ -540,16 +540,32 @@ var RunfastShare = (function () {
   };
 
   // ---------- 导入前校验 ----------
-  function importNamesValid(data) {
+  const validId = (s) => /^[A-Za-z0-9_-]{1,32}$/.test(s);
+  function importValid(data) {
     const names = new Set(data.playerDirectory);
-    data.sessions.forEach((s) => {
+    let activeCount = 0;
+    for (const s of data.sessions) {
+      if (!validId(s.id)) return false;
+      if (!(Number.isInteger(s.pricePerCardFen) && s.pricePerCardFen > 0)) return false;
+      if (!(s.status === 'active' || s.status === 'finished')) return false;
+      if (!(Array.isArray(s.players) && Array.isArray(s.activePlayers) && Array.isArray(s.rounds))) return false;
+      if (s.status === 'active') activeCount++;
       s.players.forEach((n) => names.add(n));
       s.activePlayers.forEach((n) => names.add(n));
-      s.rounds.forEach((r) => {
+      for (const r of s.rounds) {
+        if (!validId(r.id)) return false;
+        if (typeof r.winner !== 'string' || !s.players.includes(r.winner)) return false;
+        if (!Array.isArray(r.losers)) return false;
+        for (const l of r.losers) {
+          if (!s.players.includes(l.name)) return false;
+          if (!(Number.isInteger(l.cardsLeft) && l.cardsLeft >= 0 && l.cardsLeft <= 10)) return false;
+          if (typeof l.shutout !== 'boolean') return false;
+        }
         names.add(r.winner);
         r.losers.forEach((l) => names.add(l.name));
-      });
-    });
+      }
+    }
+    if (activeCount > 1) return false;
     return Array.from(names).every((n) => validName(n));
   }
 
@@ -580,6 +596,7 @@ var RunfastShare = (function () {
     },
 
     startSession() {
+      if (activeSession()) { App.goSession(); return; }
       const priceFen = L.yuanToFen(document.getElementById('price').value.trim());
       if (view.sel.length < 2 || view.sel.length > 8) { alert('请选择 2～8 名玩家'); return; }
       if (Number.isNaN(priceFen)) { alert('单价格式不对，例：1 或 0.5'); return; }
@@ -599,7 +616,7 @@ var RunfastShare = (function () {
     goRecord() {
       const s = activeSession();
       if (s.activePlayers.length < 2) { alert('在场玩家不足 2 人，请先到「玩家管理」加人'); return; }
-      go({ name: 'record', participants: s.activePlayers.slice(), winner: null, cards: {}, shutoutOff: {}, editId: null, editIndex: null });
+      go({ name: 'record', participants: s.activePlayers.slice(), winner: null, cards: Object.create(null), shutoutOff: Object.create(null), editId: null, editIndex: null });
     },
 
     pickWinner(name) {
@@ -644,7 +661,7 @@ var RunfastShare = (function () {
       const s = activeSession();
       const i = s.rounds.findIndex((x) => x.id === rid);
       const r = s.rounds[i];
-      const cards = {}, shutoutOff = {};
+      const cards = Object.create(null), shutoutOff = Object.create(null);
       r.losers.forEach((l) => {
         cards[l.name] = l.cardsLeft;
         if (l.cardsLeft === 10 && !l.shutout) shutoutOff[l.name] = true;
@@ -745,7 +762,7 @@ var RunfastShare = (function () {
             if (data.version !== 1 || !Array.isArray(data.sessions) || !Array.isArray(data.playerDirectory)) {
               throw new Error('bad format');
             }
-            if (!importNamesValid(data)) throw new Error('bad format');
+            if (!importValid(data)) throw new Error('bad format');
             if (!confirm('导入将覆盖本手机上现有的全部记分数据，确定？')) return;
             db = data;
             saveDB();
