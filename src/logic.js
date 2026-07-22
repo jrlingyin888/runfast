@@ -42,7 +42,7 @@ var RunfastLogic = (function () {
 
   // 整场累计净额。包含 session.players 中所有人（未参局者为 0），顺序同 players。
   function sessionNet(session) {
-    const net = {};
+    const net = Object.create(null);
     const entry = (n) => (net[n] ||= { name: n, cards: 0, fen: 0 });
     session.players.forEach(entry);
     session.rounds.forEach((round) => {

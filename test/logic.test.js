@@ -143,3 +143,18 @@ test('summaryText：包含标题、盈亏与转账行', () => {
   assert.ok(text.includes('戴六：-25 元'));
   assert.ok(text.includes('戴六 → 张三：25 元'));
 });
+
+test('sessionNet：玩家名与原型属性同名也能正确结算', () => {
+  const s = {
+    createdAt: '2026-07-22T20:00:00+08:00',
+    pricePerCardFen: 100,
+    players: ['toString', 'valueOf'],
+    rounds: [
+      { id: 'r1', winner: 'toString', losers: [{ name: 'valueOf', cardsLeft: 3, shutout: false }] },
+    ],
+  };
+  assert.deepEqual(L.sessionNet(s), [
+    { name: 'toString', cards: 3, fen: 300 },
+    { name: 'valueOf', cards: -3, fen: -300 },
+  ]);
+});
