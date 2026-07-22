@@ -349,7 +349,7 @@ var RunfastSync = (function () {
     try {
       if (forceRefresh) await refreshIdToken();
       token = await freshToken();
-    } catch (e) { scheduleRetry(); return; } // 取 token 失败（如断网）：稍后重试，订阅不死
+    } catch (e) { if (g === gen) scheduleRetry(); return; } // 取 token 失败（如断网）：稍后重试，订阅不死；被取代的旧尝试不再重试
     if (g !== gen || !currentCode) return;   // 期间被新的 subscribe/close 取代
     es = new EventSource(roomUrl(currentCode) + '?auth=' + token);
     es.addEventListener('put', onEvt);
