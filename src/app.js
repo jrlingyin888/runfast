@@ -268,7 +268,7 @@
   };
 
   // ---------- 导入前校验 ----------
-  const validId = (s) => /^[A-Za-z0-9_-]{1,32}$/.test(s);
+  const validId = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(s);
   function importValid(data) {
     const names = new Set(data.playerDirectory);
     let activeCount = 0;
@@ -277,11 +277,15 @@
       if (!(Number.isInteger(s.pricePerCardFen) && s.pricePerCardFen > 0)) return false;
       if (!(s.status === 'active' || s.status === 'finished')) return false;
       if (!(Array.isArray(s.players) && Array.isArray(s.activePlayers) && Array.isArray(s.rounds))) return false;
+      if (new Set(s.players).size !== s.players.length) return false;
+      if (new Set(s.activePlayers).size !== s.activePlayers.length) return false;
+      if (!s.activePlayers.every((n) => s.players.includes(n))) return false;
       if (s.status === 'active') activeCount++;
       s.players.forEach((n) => names.add(n));
       s.activePlayers.forEach((n) => names.add(n));
       for (const r of s.rounds) {
         if (!validId(r.id)) return false;
+        if (r.at !== undefined && typeof r.at !== 'string') return false;
         if (typeof r.winner !== 'string' || !s.players.includes(r.winner)) return false;
         if (!Array.isArray(r.losers)) return false;
         for (const l of r.losers) {
@@ -334,6 +338,7 @@
       view.price = document.getElementById('price').value;
       db.playerDirectory = db.playerDirectory.filter((n) => n !== name);
       view.sel = view.sel.filter((n) => n !== name);
+      if (!db.playerDirectory.length) view.manage = false;
       saveDB();
       render();
     },
