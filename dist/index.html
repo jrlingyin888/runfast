@@ -320,6 +320,11 @@ var RunfastShare = (function () {
     const d = new Date(iso);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
+  const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
   const activeSession = () => db.sessions.find((s) => s.status === 'active') || null;
   const topbar = (title, backJs) =>
     `<div class="topbar">${backJs ? `<button class="back" onclick="${backJs}">‹ 返回</button>` : ''}<div class="title">${title}</div></div>`;
@@ -364,15 +369,26 @@ var RunfastShare = (function () {
   // ---------- 开新一场 ----------
   VIEWS.setup = () => {
     const sel = view.sel;
+    const dir = db.playerDirectory;
     return `
       ${topbar('开新一场', 'App.goHome()')}
       <div class="card">
-        <div class="section-title">选择玩家（2～8 人）</div>
-        <div class="chips">
-          ${db.playerDirectory.map((n) =>
-            `<button class="chip ${sel.includes(n) ? 'on' : ''}" onclick="App.togglePlayer('${esc(n)}')">${esc(n)}</button>`).join('')
-          || '<span class="muted">还没有玩家，先在下面添加</span>'}
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>选择玩家（2～8 人）</span>
+          ${dir.length ? `<button class="btn btn-sm" onclick="App.toggleManage()">${view.manage ? '完成' : '管理名录'}</button>` : ''}
         </div>
+        ${view.manage
+          ? dir.map((n) => `<div class="row"><span>${esc(n)}</span>
+              <div style="flex-shrink:0">
+                <button class="btn btn-sm" onclick="App.renameDirName('${esc(n)}')">改名</button>
+                <button class="btn btn-sm" onclick="App.deleteDirName('${esc(n)}')">删除</button>
+              </div></div>`).join('') +
+            '<div class="muted" style="margin-top:8px">改名/删除只影响这里的常用名单，不影响历史战绩。</div>'
+          : `<div class="chips">
+              ${dir.map((n) =>
+                `<button class="chip ${sel.includes(n) ? 'on' : ''}" onclick="App.togglePlayer('${esc(n)}')">${esc(n)}</button>`).join('')
+              || '<span class="muted">还没有常用玩家，在下面添加第一位吧</span>'}
+            </div>`}
         <div style="display:flex;gap:8px;margin-top:12px">
           <input type="text" id="newName" placeholder="新玩家名字（8 字以内）" maxlength="8">
           <button class="btn btn-sm" onclick="App.addPlayer()">添加</button>
@@ -391,7 +407,7 @@ var RunfastShare = (function () {
     const detail = L.roundTransfers(r, s.pricePerCardFen)
       .map((t) => `${esc(t.from)} ${t.cards}张`).join('，');
     return `<div class="row">
-      <div><b>第${i + 1}局</b> ${esc(r.winner)} 赢
+      <div><b>第${i + 1}局</b> ${esc(r.winner)} 赢${r.at ? ` <span class="muted">${fmtTime(r.at)}</span>` : ''}
         <div class="muted">${detail || '其他人也都出完了'}</div></div>
       ${readonly ? '' : `<div style="flex-shrink:0">
         <button class="btn btn-sm" onclick="App.editRound('${r.id}')">改</button>
@@ -572,7 +588,7 @@ var RunfastShare = (function () {
   // ---------- 交互 ----------
   const App = {
     goHome: () => go({ name: 'home' }),
-    goSetup: () => go({ name: 'setup', sel: [], price: '1' }),
+    goSetup: () => go({ name: 'setup', sel: [], price: '1', manage: false }),
     goSession: () => go({ name: 'session' }),
     goHistory: () => go({ name: 'history' }),
 
@@ -580,6 +596,33 @@ var RunfastShare = (function () {
       view.price = document.getElementById('price').value; // 保留已输入的单价
       const i = view.sel.indexOf(name);
       if (i >= 0) view.sel.splice(i, 1); else view.sel.push(name);
+      render();
+    },
+
+    toggleManage() {
+      view.price = document.getElementById('price').value;
+      view.manage = !view.manage;
+      render();
+    },
+
+    renameDirName(name) {
+      const next = (window.prompt('把「' + name + '」改为（不影响历史战绩）：', name) || '').trim();
+      if (!next || next === name) return;
+      if (!validName(next)) { alert('名字需 1～8 个字，且不能含引号等特殊符号'); return; }
+      if (db.playerDirectory.includes(next)) { alert('名单里已有这个名字'); return; }
+      view.price = document.getElementById('price').value;
+      db.playerDirectory = db.playerDirectory.map((n) => (n === name ? next : n));
+      view.sel = view.sel.map((n) => (n === name ? next : n));
+      saveDB();
+      render();
+    },
+
+    deleteDirName(name) {
+      if (!confirm('从常用名单删除「' + name + '」？不影响历史战绩。')) return;
+      view.price = document.getElementById('price').value;
+      db.playerDirectory = db.playerDirectory.filter((n) => n !== name);
+      view.sel = view.sel.filter((n) => n !== name);
+      saveDB();
       render();
     },
 
