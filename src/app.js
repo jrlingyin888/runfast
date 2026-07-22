@@ -315,6 +315,7 @@
 
     comeBack(name) {
       const s = activeSession();
+      if (s.activePlayers.length >= 8) { alert('在场玩家已达 8 人上限'); return; }
       s.activePlayers.push(name);
       saveDB();
       render();
