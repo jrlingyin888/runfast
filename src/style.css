@@ -20,7 +20,7 @@ h1 { font-size: 22px; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
 input[type=text] { width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 16px; }
 .muted { color: #6b7280; font-size: 13px; }
-.badge { display: inline-block; padding: 3px 10px; border-radius: 6px; background: #fef3c7; color: #92400e; font-size: 12px; font-weight: 600; border: 0; cursor: button; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 6px; background: #fef3c7; color: #92400e; font-size: 12px; font-weight: 600; border: 0; cursor: pointer; }
 .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .topbar .title { font-weight: 700; font-size: 18px; }
 .back { border: 0; background: none; font-size: 16px; color: #2563eb; padding: 4px; cursor: pointer; }
