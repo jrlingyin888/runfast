@@ -187,6 +187,7 @@
         ${topbar('已记 ' + s.rounds.length + ' 局 · ' + yuan(s.pricePerCardFen) + '元/张', '')}
         ${onlineBar()}
         ${scoreCard}
+        ${emptySeatClaimCard()}
         ${draftCard()}
         ${isOwner() ? `<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
           <button class="btn" onclick="App.goPlayers()">玩家管理</button>
@@ -208,6 +209,19 @@
       <div style="margin-top:10px"><button class="btn btn-danger" onclick="App.finishSession()">结束本场</button></div>
       ${roundsCard}`;
   };
+
+  // 记分阶段的空座认领：本局在场但没人坐的座位（本人离开又回来、或换人接手），谁都能点着接手 TA 那格，分数按名字继承。
+  function emptySeatClaimCard() {
+    const seats = seatsOf();
+    const empties = activeIdx().filter((i) => !seats[i].claimedBy);
+    if (!empties.length) return '';
+    return `<div class="card">
+      <div class="section-title">空座待认领</div>
+      <div class="muted" style="margin-bottom:8px">这些位置暂时没人记分。回来的人点自己名字接着记；也可由别人接手，继续记 TA 的分。</div>
+      <div class="chips">${empties.map((i) =>
+        `<button class="chip" onclick="App.claimSeat(${i})">坐「${esc(seats[i].name)}」的位置</button>`).join('')}</div>
+    </div>`;
+  }
 
   // 联机协作草稿：赢家先定 → 各座各填「剩几张」并点确认 → 全部确认后自动记录本局（房主端提交）
   function draftCard() {
