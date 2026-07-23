@@ -442,13 +442,13 @@
     goHistory: () => go({ name: 'history' }),
 
     goOnlineSetup() {
-      if (!RunfastSync.configured()) { alert('联机功能尚未配置，请先完成 Firebase 配置'); return; }
+      if (!RunfastSync.configured()) { alert('联机要在房主电脑上启动「跑得快联机」服务后，用手机扫主机页二维码进入才能用'); return; }
       if (activeSession()) { alert('本地还有一场没打完，请先结束或作废它'); return; }
       go({ name: 'setup', sel: [], price: '1', manage: false, mode: 'online' });
     },
 
     goJoinRoom() {
-      if (!RunfastSync.configured()) { alert('联机功能尚未配置，请先完成 Firebase 配置'); return; }
+      if (!RunfastSync.configured()) { alert('联机要在房主电脑上启动「跑得快联机」服务后，用手机扫主机页二维码进入才能用'); return; }
       go({ name: 'joinRoom' });
     },
 
