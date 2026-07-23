@@ -10,6 +10,15 @@ const qrcode = require('./src/vendor/qrcode.js');
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 8787;
 
+// 记分页/主机页禁止缓存：手机(尤其微信内置浏览器)默认会缓存 HTML，
+// 导致更新后仍跑旧 JS。强制每次拿最新，避免"改了还是旧行为"。
+const HTML_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 // ---------- 局域网寻址 ----------
 function lanIP() {
   const ifaces = os.networkInterfaces();
@@ -138,14 +147,14 @@ function createRunfastServer(options = {}) {
       let html;
       try { html = fs.readFileSync(path.join(ROOT, 'dist', 'index.html'), 'utf8'); }
       catch (e) { res.writeHead(500); res.end('缺少 dist/index.html，请先在项目目录运行 node build.js'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, HTML_HEADERS);
       res.end(injectHostFlag(html));
       return;
     }
     // 主机页（本机屏幕看二维码）
     if (req.method === 'GET' && p === '/host') {
       const port = server.address() ? server.address().port : PORT;
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, HTML_HEADERS);
       res.end(hostPage(lanURL(port)));
       return;
     }

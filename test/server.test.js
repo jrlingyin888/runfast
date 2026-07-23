@@ -16,7 +16,7 @@ function req(port, method, p, body, headers) {
     const data = body === undefined ? undefined : JSON.stringify(body);
     const r = http.request({ host: '127.0.0.1', port, method, path: p,
       headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}) }, (res) => {
-      let b = ''; res.on('data', (c) => b += c); res.on('end', () => resolve({ status: res.statusCode, body: b }));
+      let b = ''; res.on('data', (c) => b += c); res.on('end', () => resolve({ status: res.statusCode, body: b, headers: res.headers }));
     });
     r.on('error', reject);
     if (data) r.write(data);
@@ -138,8 +138,10 @@ test('静态：/ 注入主机标志；/host 含本机地址与内联二维码；
     let r = await req(port, 'GET', '/');
     // dist 存在则发出记分页（含占位注释时会注入主机标志，注入逻辑由上面的单测覆盖）；
     // dist 缺失则给可读错误。二者都算通过，避免与 Task 4 的构建顺序耦合。
-    if (r.status === 200) assert.ok(r.body.includes('id="app"'));
-    else assert.match(r.body, /dist\/index\.html/);
+    if (r.status === 200) {
+      assert.ok(r.body.includes('id="app"'));
+      assert.match(r.headers['cache-control'] || '', /no-store/); // 禁缓存，避免手机跑旧代码
+    } else assert.match(r.body, /dist\/index\.html/);
 
     r = await req(port, 'GET', '/host');
     assert.equal(r.status, 200);
