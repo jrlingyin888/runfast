@@ -1388,26 +1388,48 @@ var RunfastShare = (function () {
     goPlayers: () => go({ name: 'players' }),
 
     leave(name) {
+      if (online.active) {
+        if (!isOwner()) { alert('只有房主可以标记离场'); return; }
+        const i = seatsOf().findIndex((s) => s.name === name);
+        RunfastSync.mutate(online.code, (room) => {
+          room.session.activePlayers = room.session.activePlayers.filter((n) => n !== name);
+          if (room.seats[i]) room.seats[i].claimedBy = null; // 腾座
+          room.updatedAt = Date.now();
+          return room;
+        }).catch((e) => alert('操作失败：' + e.message));
+        return;
+      }
       commitSession((s) => { s.activePlayers = s.activePlayers.filter((n) => n !== name); });
     },
 
     comeBack(name) {
       const s = sessionCtx();
       if (s.activePlayers.length >= 8) { alert('在场玩家已达 8 人上限'); return; }
+      if (online.active && !isOwner()) { alert('只有房主可以让玩家回归'); return; }
       commitSession((x) => { x.activePlayers.push(name); });
     },
 
-    joinPlayer() {
+    async joinPlayer() {
       const s = sessionCtx();
       const name = document.getElementById('joinName').value.trim();
       if (!validName(name)) { alert('名字需 1～8 个字，且不能含引号等特殊符号'); return; }
       if (s.players.includes(name)) { alert('这个名字本场已存在'); return; }
       if (s.activePlayers.length >= 8) { alert('在场玩家已达 8 人上限'); return; }
       if (!db.playerDirectory.includes(name)) { db.playerDirectory.push(name); saveDB(); }
-      commitSession((x) => {
-        x.players.push(name);
-        x.activePlayers.push(name);
-      });
+      if (online.active) {
+        if (!isOwner()) { alert('只有房主可以加人'); return; }
+        try {
+          await RunfastSync.mutate(online.code, (room) => {
+            room.session.players.push(name);
+            room.session.activePlayers.push(name);
+            room.seats.push({ name, claimedBy: null }); // 新座位待认领
+            room.updatedAt = Date.now();
+            return room;
+          });
+        } catch (e) { alert('加人失败：' + e.message); }
+        return;
+      }
+      commitSession((x) => { x.players.push(name); x.activePlayers.push(name); });
     },
 
     finishSession() {
