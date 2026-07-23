@@ -44,8 +44,13 @@ test('applyEvent：子路径定点更新不改原对象', () => {
   assert.ok(!('status' in next3.session));
 });
 
-test('configured：Firebase 配置已填入时为 true', () => {
+test('configured：仅当页面被主机服务器注入 __RUNFAST_HOST__ 时为 true', () => {
+  assert.equal(S.configured(), false);            // Node 无 window
+  global.window = { __RUNFAST_HOST__: true };
   assert.equal(S.configured(), true);
+  global.window = {};
+  assert.equal(S.configured(), false);
+  delete global.window;
 });
 
 test('normalizeRoom：RTDB 丢掉的空数组字段被补回', () => {
