@@ -230,6 +230,29 @@ var RunfastSync = (function () {
     return room;
   }
 
+  // ---------- 协作草稿 / 人数（纯函数）----------
+  // draft={winner:<座位下标>|null, entries:{<下标>:{cardsLeft,shutout}}}；activeIdx=本局参与的座位下标数组
+  function isDraftSaveable(draft, activeIdx) {
+    if (!draft || draft.winner == null) return false;
+    return activeIdx.filter((i) => i !== draft.winner)
+      .every((i) => draft.entries && draft.entries[i] && typeof draft.entries[i].cardsLeft === 'number');
+  }
+  function draftToRound(draft, seats, activeIdx) {
+    const losers = activeIdx.filter((i) => i !== draft.winner).map((i) => ({
+      name: seats[i].name,
+      cardsLeft: draft.entries[i].cardsLeft,
+      shutout: !!draft.entries[i].shutout,
+    }));
+    return { winner: seats[draft.winner].name, losers };
+  }
+  function observerCount(deviceIds, seats) {
+    const seated = new Set((seats || []).map((s) => s.claimedBy).filter(Boolean));
+    return (deviceIds || []).filter((d) => !seated.has(d)).length;
+  }
+  function playingCount(seats) {
+    return (seats || []).filter((s) => s.claimedBy).length;
+  }
+
   // ---------- 设备身份（取代 Firebase 匿名认证）----------
   const DEV_KEY = 'runfast.device';
   let deviceId = null;
@@ -264,6 +287,17 @@ var RunfastSync = (function () {
     });
     if (res.status === 403) throw new Error('没有修改权限');
     if (!res.ok) throw new Error('写入失败 ' + res.status);
+  }
+
+  // 字段级写：只更新指定路径（各人填各自那格互不覆盖）。403 → 没权限/座位已被占。
+  async function patch(code, path, value) {
+    const res = await fetch(roomUrl(code), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+      body: JSON.stringify({ path, value }),
+    });
+    if (res.status === 403) throw new Error('没有权限或座位已被占');
+    if (!res.ok) throw new Error('操作失败 ' + res.status);
   }
 
   // 读-改-写（局域网服务器按请求串行处理，无需 ETag 乐观锁）
@@ -308,8 +342,9 @@ var RunfastSync = (function () {
     if (es) { es.close(); es = null; }
     if (!currentCode) return;
     if (cb && cb.onStatus) cb.onStatus('connecting');
-    es = new EventSource(roomUrl(currentCode) + '/events');
+    es = new EventSource(roomUrl(currentCode) + '/events?dev=' + encodeURIComponent(deviceId || ''));
     es.addEventListener('put', onEvt);
+    es.addEventListener('presence', onPresence);
     es.onopen = () => { if (g === gen && cb && cb.onStatus) cb.onStatus('connected'); };
     es.onerror = () => {
       if (g !== gen) return;
@@ -332,6 +367,11 @@ var RunfastSync = (function () {
     if (cb.onRoom) cb.onRoom(room);
   }
 
+  function onPresence(e) {
+    if (!cb || !cb.onPresence) return;
+    try { cb.onPresence(JSON.parse(e.data).devices || []); } catch (err) { /* 忽略坏帧 */ }
+  }
+
   function close() {
     gen++;
     clearTimeout(retryTimer);
@@ -339,8 +379,9 @@ var RunfastSync = (function () {
     es = null; room = null; currentCode = null; cb = null;
   }
 
-  const api = { configured, genRoomCode, validRoomCode, canEdit, canAdmin, activeLock, applyEvent, normalizeRoom,
-    signIn, getUid, createRoom, readRoom, subscribe, mutate, deleteRoom, close };
+  const api = { configured, genRoomCode, validRoomCode, canEdit, canAdmin, activeLock,
+    isDraftSaveable, draftToRound, observerCount, playingCount,
+    applyEvent, normalizeRoom, signIn, getUid, createRoom, readRoom, subscribe, patch, mutate, deleteRoom, close };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
 })();

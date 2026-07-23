@@ -110,6 +110,17 @@ var RunfastSync = (function () {
     if (!res.ok) throw new Error('写入失败 ' + res.status);
   }
 
+  // 字段级写：只更新指定路径（各人填各自那格互不覆盖）。403 → 没权限/座位已被占。
+  async function patch(code, path, value) {
+    const res = await fetch(roomUrl(code), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+      body: JSON.stringify({ path, value }),
+    });
+    if (res.status === 403) throw new Error('没有权限或座位已被占');
+    if (!res.ok) throw new Error('操作失败 ' + res.status);
+  }
+
   // 读-改-写（局域网服务器按请求串行处理，无需 ETag 乐观锁）
   async function mutate(code, opFn) {
     const { data } = await readRoom(code);
@@ -152,8 +163,9 @@ var RunfastSync = (function () {
     if (es) { es.close(); es = null; }
     if (!currentCode) return;
     if (cb && cb.onStatus) cb.onStatus('connecting');
-    es = new EventSource(roomUrl(currentCode) + '/events');
+    es = new EventSource(roomUrl(currentCode) + '/events?dev=' + encodeURIComponent(deviceId || ''));
     es.addEventListener('put', onEvt);
+    es.addEventListener('presence', onPresence);
     es.onopen = () => { if (g === gen && cb && cb.onStatus) cb.onStatus('connected'); };
     es.onerror = () => {
       if (g !== gen) return;
@@ -176,6 +188,11 @@ var RunfastSync = (function () {
     if (cb.onRoom) cb.onRoom(room);
   }
 
+  function onPresence(e) {
+    if (!cb || !cb.onPresence) return;
+    try { cb.onPresence(JSON.parse(e.data).devices || []); } catch (err) { /* 忽略坏帧 */ }
+  }
+
   function close() {
     gen++;
     clearTimeout(retryTimer);
@@ -185,7 +202,7 @@ var RunfastSync = (function () {
 
   const api = { configured, genRoomCode, validRoomCode, canEdit, canAdmin, activeLock,
     isDraftSaveable, draftToRound, observerCount, playingCount,
-    applyEvent, normalizeRoom, signIn, getUid, createRoom, readRoom, subscribe, mutate, deleteRoom, close };
+    applyEvent, normalizeRoom, signIn, getUid, createRoom, readRoom, subscribe, patch, mutate, deleteRoom, close };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
 })();
