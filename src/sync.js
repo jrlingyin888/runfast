@@ -51,6 +51,29 @@ var RunfastSync = (function () {
     return room;
   }
 
+  // ---------- 协作草稿 / 人数（纯函数）----------
+  // draft={winner:<座位下标>|null, entries:{<下标>:{cardsLeft,shutout}}}；activeIdx=本局参与的座位下标数组
+  function isDraftSaveable(draft, activeIdx) {
+    if (!draft || draft.winner == null) return false;
+    return activeIdx.filter((i) => i !== draft.winner)
+      .every((i) => draft.entries && draft.entries[i] && typeof draft.entries[i].cardsLeft === 'number');
+  }
+  function draftToRound(draft, seats, activeIdx) {
+    const losers = activeIdx.filter((i) => i !== draft.winner).map((i) => ({
+      name: seats[i].name,
+      cardsLeft: draft.entries[i].cardsLeft,
+      shutout: !!draft.entries[i].shutout,
+    }));
+    return { winner: seats[draft.winner].name, losers };
+  }
+  function observerCount(deviceIds, seats) {
+    const seated = new Set((seats || []).map((s) => s.claimedBy).filter(Boolean));
+    return (deviceIds || []).filter((d) => !seated.has(d)).length;
+  }
+  function playingCount(seats) {
+    return (seats || []).filter((s) => s.claimedBy).length;
+  }
+
   // ---------- 设备身份（取代 Firebase 匿名认证）----------
   const DEV_KEY = 'runfast.device';
   let deviceId = null;
@@ -160,8 +183,9 @@ var RunfastSync = (function () {
     es = null; room = null; currentCode = null; cb = null;
   }
 
-  const api = { configured, genRoomCode, validRoomCode, canEdit, canAdmin, activeLock, applyEvent, normalizeRoom,
-    signIn, getUid, createRoom, readRoom, subscribe, mutate, deleteRoom, close };
+  const api = { configured, genRoomCode, validRoomCode, canEdit, canAdmin, activeLock,
+    isDraftSaveable, draftToRound, observerCount, playingCount,
+    applyEvent, normalizeRoom, signIn, getUid, createRoom, readRoom, subscribe, mutate, deleteRoom, close };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
 })();

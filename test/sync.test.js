@@ -72,3 +72,24 @@ test('normalizeRoom：RTDB 丢掉的空数组字段被补回', () => {
   assert.deepEqual(S.normalizeRoom(room2).session.rounds[0].losers, []);
   assert.equal(S.normalizeRoom(null), null);
 });
+
+test('isDraftSaveable / draftToRound：赢家定且各输家填齐才可存，并能转成一局', () => {
+  const seats = [{ name: 'A', claimedBy: 'd1' }, { name: 'B', claimedBy: 'd2' }, { name: 'C', claimedBy: 'd3' }];
+  const active = [0, 1, 2];
+  assert.equal(S.isDraftSaveable(null, active), false);
+  assert.equal(S.isDraftSaveable({ winner: 0, entries: {} }, active), false);
+  assert.equal(S.isDraftSaveable({ winner: 0, entries: { 1: { cardsLeft: 3 } } }, active), false);
+  const full = { winner: 0, entries: { 1: { cardsLeft: 3, shutout: false }, 2: { cardsLeft: 10, shutout: true } } };
+  assert.equal(S.isDraftSaveable(full, active), true);
+  const r = S.draftToRound(full, seats, active);
+  assert.equal(r.winner, 'A');
+  assert.deepEqual(r.losers, [{ name: 'B', cardsLeft: 3, shutout: false }, { name: 'C', cardsLeft: 10, shutout: true }]);
+});
+
+test('observerCount / playingCount：在线未占座算观战，已认领算在玩（含一台代多座）', () => {
+  const seats = [{ name: 'A', claimedBy: 'd1' }, { name: 'B', claimedBy: null }, { name: 'C', claimedBy: 'd1' }];
+  assert.equal(S.playingCount(seats), 2);
+  assert.equal(S.observerCount(['d1', 'd9', 'd8'], seats), 2);
+  assert.equal(S.observerCount(['d1'], seats), 0);
+  assert.equal(S.observerCount([], seats), 0);
+});
