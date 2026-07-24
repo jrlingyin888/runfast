@@ -733,14 +733,15 @@ var RunfastShare = (function () {
   };
 
   // ---------- 记分主页 ----------
-  function roundRow(s, r, i, readonly) {
+  // from：这一行是在哪个页面渲染的（'rounds' = 明细页），决定改完之后回哪
+  function roundRow(s, r, i, readonly, from) {
     const detail = L.roundTransfers(r, s.pricePerCardFen)
       .map((t) => `${esc(t.from)} ${t.cards}张`).join('，');
     return `<div class="row">
       <div><b>第${i + 1}局</b> ${esc(r.winner)} 赢${r.at ? ` <span class="muted">${fmtTime(r.at)}</span>` : ''}
         <div class="muted">${detail || '其他人也都出完了'}</div></div>
       ${readonly ? '' : `<div style="flex-shrink:0">
-        <button class="btn btn-sm" onclick="App.editRound('${r.id}')">改</button>
+        <button class="btn btn-sm" onclick="App.editRound('${r.id}','${from || 'session'}')">改</button>
         <button class="btn btn-sm" onclick="App.deleteRound('${r.id}')">删</button></div>`}
     </div>`;
   }
@@ -754,9 +755,9 @@ var RunfastShare = (function () {
         <span>${esc(p.name)}${s.activePlayers.includes(p.name) ? '' : ' <span class="muted">（已离场）</span>'}</span>
         <span class="${cls(p.fen)}">${p.cards > 0 ? '+' : ''}${p.cards} 张 · ${signYuan(p.fen)} 元</span>
       </div>`).join('')}</div>`;
-    const roundsCard = `<div class="card" style="margin-top:12px">
-      ${s.rounds.map((r, i) => roundRow(s, r, i, !online.active ? false : !RunfastSync.canEdit(online.room, online.uid))).join('')
-        || '<div class="muted">还没有记录' + (online.active ? '，在上面记这一局' : '，点上面「记一局」开始') + '</div>'}</div>`;
+    const detailEntry = s.rounds.length
+      ? `<button class="btn" style="margin-top:12px" onclick="App.goRounds('${s.id}','session')">查看每局明细（${s.rounds.length} 局） ›</button>`
+      : `<div class="card" style="margin-top:12px"><div class="muted">还没有记录${online.active ? '，在上面记这一局' : '，点上面「记一局」开始'}</div></div>`;
 
     if (online.active) {
       return `
@@ -771,7 +772,7 @@ var RunfastShare = (function () {
           <button class="btn" onclick="App.toggleAllowEdit()">${online.room.allowEdit ? '✅ 牌友可改已存局' : '🔒 改局仅房主'}</button>
         </div>
         <div style="margin-top:10px"><button class="btn btn-danger" onclick="App.finishSession()">结束本场</button></div>` : ''}
-        ${roundsCard}`;
+        ${detailEntry}`;
     }
     // 本地单机（原逻辑）
     return `
@@ -783,7 +784,7 @@ var RunfastShare = (function () {
         <button class="btn" onclick="App.voidSession()">作废本场</button>
       </div>
       <div style="margin-top:10px"><button class="btn btn-danger" onclick="App.finishSession()">结束本场</button></div>
-      ${roundsCard}`;
+      ${detailEntry}`;
   };
 
   // 记分阶段的空座认领：本局在场但没人坐的座位（本人离开又回来、或换人接手），谁都能点着接手 TA 那格，分数按名字继承。
@@ -929,12 +930,27 @@ var RunfastShare = (function () {
 
   // ---------- 只读局明细 ----------
   VIEWS.rounds = () => {
-    const s = db.sessions.find((x) => x.id === view.sid);
+    // 进行中的场（联机的不在 db.sessions 里）优先用 sessionCtx()，否则查本地历史
+    const live = sessionCtx();
+    const s = (live && live.id === view.sid) ? live : db.sessions.find((x) => x.id === view.sid);
+    if (!s) return VIEWS.home();
+    const fromSession = view.from === 'session';
+    const editable = fromSession && (!online.active || RunfastSync.canEdit(online.room, online.uid));
+    const back = fromSession ? 'App.goSession()' : `App.goSettle('${view.sid}','${view.from}')`;
     return `
-      ${topbar('每局明细', `App.goSettle('${view.sid}','${view.from}')`)}
-      <div class="card">${s.rounds.map((r, i) => roundRow(s, r, i, true)).join('')
+      ${topbar('每局明细', back)}
+      <div class="card">${s.rounds.map((r, i) => roundRow(s, r, i, !editable, 'rounds')).join('')
         || '<div class="muted">本场没有记录任何一局</div>'}</div>`;
   };
+
+  // 录入/改局结束后回哪：从明细页进来的回明细页，否则回记分页
+  function afterRecord(returnTo) {
+    if (returnTo === 'rounds') {
+      const s = sessionCtx();
+      if (s) { App.goRounds(s.id, 'session'); return; }
+    }
+    App.goSession();
+  }
 
   // ---------- 历史记录 ----------
   VIEWS.history = () => {
@@ -1373,7 +1389,7 @@ var RunfastShare = (function () {
       go({ name: 'record', participants: s.activePlayers.slice(), winner: null, cards: Object.create(null), shutoutOff: Object.create(null), editId: null, editIndex: null });
     },
 
-    cancelRecord() { App.goSession(); },
+    cancelRecord() { afterRecord(view.returnTo); },
 
 
     pickWinner(name) {
@@ -1399,6 +1415,7 @@ var RunfastShare = (function () {
       if (!view.winner || losers.some((l) => typeof l.cardsLeft !== 'number')) return;
       const winner = view.winner;
       const editId = view.editId;
+      const returnTo = view.returnTo;
       const newRound = editId ? null : { id: 'r' + Date.now(), at: new Date().toISOString(), winner, losers };
       commitSession((s) => {
         if (editId) {
@@ -1410,10 +1427,10 @@ var RunfastShare = (function () {
           s.rounds.push(newRound);
         }
       });
-      App.goSession();
+      afterRecord(returnTo);
     },
 
-    editRound(rid) {
+    editRound(rid, from) {
       if (online.active && !RunfastSync.canEdit(online.room, online.uid)) { alert('房主未开启「允许他人修改」，只有房主可以改这一局'); return; }
       const s = sessionCtx();
       const i = s.rounds.findIndex((x) => x.id === rid);
@@ -1428,6 +1445,7 @@ var RunfastShare = (function () {
         participants: [r.winner, ...r.losers.map((l) => l.name)],
         winner: r.winner, cards, shutoutOff,
         editId: rid, editIndex: i + 1,
+        returnTo: from === 'rounds' ? 'rounds' : 'session',
       });
     },
 
