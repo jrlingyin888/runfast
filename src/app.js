@@ -72,8 +72,28 @@
     }
   }
 
-  const topbar = (title, backJs) =>
-    `<div class="topbar">${backJs ? `<button class="back" onclick="${backJs}">‹ 返回</button>` : ''}<div class="title">${title}</div></div>`;
+  const topbar = (title, backJs, actionsHtml) =>
+    `<div class="topbar">${backJs ? `<button class="back" onclick="${backJs}">‹ 返回</button>` : ''}<div class="title">${title}</div>${actionsHtml ? `<span class="actions">${actionsHtml}</span>` : ''}</div>`;
+
+  // 底部弹出面板：「更多」菜单与分享面板共用。挂在 body 上而不是 #app 里，
+  // 这样联机端 onRoom 频繁 render() 重绘 #app 时面板不会被抖掉。
+  function closeSheet() { const el = document.getElementById('sheet'); if (el) el.remove(); }
+  function openSheet(items, headerHtml) {
+    closeSheet();
+    const el = document.createElement('div');
+    el.id = 'sheet';
+    el.className = 'sheet-mask';
+    el.innerHTML = `<div class="sheet">
+      ${headerHtml || ''}
+      ${items.map((it) => `<button class="sheet-item${it.danger ? ' danger' : ''}" onclick="${it.onclick}">${it.label}</button>`).join('')}
+      <button class="sheet-item cancel">取消</button>
+    </div>`;
+    // 按钮的内联 onclick 先在目标上执行，这个委托监听随后关闭面板
+    el.addEventListener('click', (ev) => {
+      if (ev.target === el || ev.target.classList.contains('sheet-item')) closeSheet();
+    });
+    document.body.appendChild(el);
+  }
 
   async function copyToClipboard(text) {
     try { await navigator.clipboard.writeText(text); return true; }
@@ -90,7 +110,7 @@
 
   // ---------- 导航与渲染 ----------
   let view = { name: 'home' };
-  function go(v) { view = v; render(); window.scrollTo(0, 0); }
+  function go(v) { closeSheet(); view = v; render(); window.scrollTo(0, 0); }
   const VIEWS = {};
   function render() { $app.innerHTML = VIEWS[view.name](); }
 

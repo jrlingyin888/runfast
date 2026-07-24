@@ -59,3 +59,18 @@ input[type=text] { width: 100%; padding: 12px; border: 1.5px solid #d1cbb8; bord
   border: 1px solid rgba(212,175,55,.4); color: var(--gold-soft); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
 .sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px; }
 .sync-dot.off { background: #f59e0b; }
+.topbar .actions { margin-left: auto; display: flex; gap: 8px; flex-shrink: 0; }
+.topbar .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn { background: rgba(0,0,0,.28); color: var(--gold-soft); border: 1px solid rgba(212,175,55,.4);
+  border-radius: 10px; padding: 7px 12px; font-size: 15px; cursor: pointer; }
+.sheet-mask { position: fixed; inset: 0; background: rgba(4,24,13,.62); z-index: 60; display: flex; align-items: flex-end; }
+.sheet { width: 100%; max-width: 520px; margin: 0 auto; background: var(--cream); color: var(--ink);
+  border-radius: 18px 18px 0 0; padding: 6px 12px calc(10px + env(safe-area-inset-bottom)); }
+.sheet-item { display: block; width: 100%; border: 0; background: none; padding: 16px; font-size: 17px;
+  color: var(--ink); text-align: center; cursor: pointer; border-bottom: 1px solid #eee; }
+.sheet-item:last-child { border-bottom: 0; }
+.sheet-item.danger { color: #b91c1c; }
+.sheet-item.cancel { margin-top: 6px; font-weight: 700; }
+.sheet .muted { color: #6b7280; }  /* 面板是米色底，.muted 默认的近白色在这里看不见 */
+.me-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  background: var(--felt-light); color: var(--gold-soft); font-size: 12px; font-weight: 700; }
