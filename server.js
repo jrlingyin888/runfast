@@ -229,6 +229,15 @@ function createRunfastServer(options = {}) {
       json(res, 200, { clients: clientCount(), rooms: Object.keys(rooms).length });
       return;
     }
+    // 二维码（邀请面板用）：局域网 HTTP 是非安全上下文，没有系统分享面板，扫码进房更实用。
+    // 只读、无状态；text 长度设上限避免被拿来生成超大图。
+    if (req.method === 'GET' && p === '/qr') {
+      const text = u.searchParams.get('text') || '';
+      if (!text || text.length > 512) { res.writeHead(400); res.end('bad text'); return; }
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(qrSvg(text));
+      return;
+    }
 
     // 房间接口 /rooms/<6位> 与 /rooms/<6位>/events
     const m = p.match(/^\/rooms\/(\d{6})(\/events)?$/);
