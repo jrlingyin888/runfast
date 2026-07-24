@@ -627,6 +627,7 @@
   }
 
   const inviteLink = () => location.origin + location.pathname + '?room=' + online.code;
+  let inviteBlob = null, inviteUrl = null;   // 邀请卡图片缓存（供「分享图片」按钮用；下次分享时释放旧的）
 
   // 改赢家时保留其余已填、去掉新赢家那格
   function cleanEntries(winnerIdx) {
@@ -790,17 +791,49 @@
       } catch (e) { alert('操作失败：' + e.message); }
     },
 
-    // 系统分享面板只在安全上下文（HTTPS / localhost）可用；
-    // 局域网明文 HTTP 下 navigator.share 根本不存在，直接走自建面板（房号 + 链接 + 二维码）。
+    // 分享：先生成「邀请卡」图片（房号+二维码），弹面板——主按钮把图片走系统分享（牌友收到图直接扫码进房），
+    // 次按钮走系统分享发链接文字，长按卡片存整张。生成失败退回旧的简单面板（房号+二维码+复制），不卡住。
     async share() {
+      const link = inviteLink(), code = online.code;
+      let cv;
+      try { cv = await RunfastShare.drawInviteCard(code, link); }
+      catch (e) { App.shareFallback(); return; }
+      const blob = await RunfastShare.toBlob(cv);
+      if (!blob) { App.shareFallback(); return; }
+      if (inviteUrl) URL.revokeObjectURL(inviteUrl);
+      inviteBlob = blob;
+      inviteUrl = URL.createObjectURL(blob);
+      const header = `<div style="text-align:center;padding:4px 0 2px">
+        <img src="${inviteUrl}" alt="扫码进房" style="width:100%;max-width:270px;border-radius:14px;display:block;margin:0 auto;box-shadow:0 6px 18px rgba(0,0,0,.35)">
+        <div class="muted" style="margin-top:10px">长按上图保存整张 · 或用下面按钮发出去</div>
+      </div>`;
+      openSheet([
+        { label: '📤 分享二维码图片', onclick: 'App.shareInviteImage()' },
+        { label: '🔗 分享链接文字', onclick: 'App.shareInviteLink()' },
+        { label: '复制链接', onclick: 'App.copyInvite()' },
+      ], header);
+    },
+
+    // 主：把邀请卡当图片文件走系统分享（微信/群里收到的是图，直接扫码进房）；不支持文件分享则桌面下载 / 手机提示长按
+    async shareInviteImage() {
+      if (!inviteBlob) return;
+      const file = new File([inviteBlob], '跑得快房间' + (online.code || '') + '.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: '跑得快记分', text: '扫码进房记分（房号 ' + online.code + '）' }); return; }
+        catch (e) { if (e.name === 'AbortError') return; }
+      }
+      if (!('ontouchstart' in window)) { const a = document.createElement('a'); a.href = inviteUrl; a.download = file.name; a.click(); }
+      else alert('长按上面的图片即可保存或转发到微信');
+    },
+
+    // 次：走系统分享把邀请链接文字发出去（需要可点链接时用）；无系统分享则退回复制
+    async shareInviteLink() {
       const link = inviteLink();
       if (navigator.share) {
-        try {
-          await navigator.share({ title: '跑得快记分', text: '一起来记分（房号 ' + online.code + '）', url: link });
-          return;
-        } catch (e) { if (e.name === 'AbortError') return; } // 用户取消就算了，其它错误落到降级
+        try { await navigator.share({ title: '跑得快记分', text: '一起来记分（房号 ' + online.code + '）', url: link }); return; }
+        catch (e) { if (e.name === 'AbortError') return; }
       }
-      App.shareFallback();
+      App.copyInvite();
     },
 
     shareFallback() {

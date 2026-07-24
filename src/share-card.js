@@ -134,7 +134,82 @@ var RunfastShare = (function () {
     document.body.appendChild(ov);
   }
 
-  const api = { share, drawCard };
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 取服务器 /qr 的二维码 SVG，转成能画进 canvas 的 Image（确保带 width/height，Safari 才能按尺寸栅格化；纯 path SVG 不污染画布）
+  function loadQr(text, size) {
+    return fetch('qr?text=' + encodeURIComponent(text))
+      .then((r) => { if (!r.ok) throw new Error('qr ' + r.status); return r.text(); })
+      .then((svg) => new Promise((resolve, reject) => {
+        if (!/<svg[^>]*\swidth=/.test(svg)) svg = svg.replace('<svg', '<svg width="' + size + '" height="' + size + '"');
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('qr img'));
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      }));
+  }
+
+  // 邀请卡：牌桌绿底 + 大房号 + 二维码 + 扫码提示。返回 canvas。（异步：要先把二维码抓下来）
+  async function drawInviteCard(code, link) {
+    const W = 560, H = 736;
+    const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 2));
+    const cv = document.createElement('canvas');
+    cv.width = W * scale;
+    cv.height = H * scale;
+    const ctx = cv.getContext('2d');
+    ctx.scale(scale, scale);
+    const font = (w, s) => { ctx.font = w + ' ' + s + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'; };
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#14532d');
+    bg.addColorStop(1, '#0c3b20');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f0d98c';
+    font(800, 40);
+    ctx.fillText('🃏 跑得快记分', W / 2, 92);
+
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    font(500, 26);
+    ctx.fillText('房号', W / 2, 150);
+    ctx.fillStyle = '#ffffff';
+    font(800, 66);
+    ctx.fillText(String(code), W / 2, 222);
+
+    // 二维码：白色圆角底（必须有白底，扫码才认）+ 画上二维码
+    const qrSize = 300, qrPad = 22, qrBox = qrSize + qrPad * 2;
+    const bx = (W - qrBox) / 2, by = 260;
+    roundRect(ctx, bx, by, qrBox, qrBox, 18);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    const qr = await loadQr(link, qrSize);
+    ctx.drawImage(qr, bx + qrPad, by + qrPad, qrSize, qrSize);
+
+    const hy = by + qrBox;
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    font(700, 28);
+    ctx.fillText('微信 / 浏览器 扫码进房', W / 2, hy + 50);
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    font(400, 23);
+    ctx.fillText('一起记分，输赢自动算', W / 2, hy + 84);
+
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    font(400, 20);
+    ctx.fillText('跑得快记分器', W / 2, H - 26);
+    return cv;
+  }
+
+  const api = { share, drawCard, drawInviteCard, toBlob };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
 })();
